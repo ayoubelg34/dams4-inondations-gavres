@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import base64
+import os
 import re
 from pathlib import Path
 
@@ -21,7 +22,7 @@ APP_CSS = """
   --bg: #f6efe4;
   --ink: #1b1b1b;
   --muted: #5c5c5c;
-  --card: rgba(255, 255, 255, 0.9);
+  --card: rgba(255, 255, 255, 0.92);
   --accent: #0f8b8d;
   --accent-2: #ff6b35;
   --accent-3: #1d3557;
@@ -92,7 +93,7 @@ body {
   align-items: center;
   margin-bottom: 24px;
   position: relative;
-  z-index: 5;
+  z-index: 6;
 }
 
 .eyebrow {
@@ -135,7 +136,8 @@ body {
 .control-card,
 .kpi-card,
 .graph-card,
-.about-card {
+.about-card,
+.status-card {
   background: var(--card);
   border: 1px solid rgba(25, 25, 25, 0.08);
   border-radius: 18px;
@@ -206,6 +208,31 @@ body {
   margin-top: 14px;
 }
 
+.status-card {
+  padding: 14px 18px;
+  margin-bottom: 24px;
+  border: 1px solid rgba(255, 107, 53, 0.3);
+  background: linear-gradient(120deg, rgba(255, 107, 53, 0.08), rgba(255, 255, 255, 0.7));
+}
+
+.status-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 15px;
+  margin: 0 0 8px;
+}
+
+.status-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.status-list li {
+  padding: 4px 0;
+}
+
 .kpi-card {
   padding: 18px 20px;
   position: relative;
@@ -256,12 +283,12 @@ body {
   inset: 0;
   border-radius: 18px;
   opacity: 0.9;
-  background: linear-gradient(140deg, rgba(15, 139, 141, 0.2), rgba(255, 255, 255, 0.5));
+  background: linear-gradient(140deg, rgba(15, 139, 141, 0.22), rgba(255, 255, 255, 0.55));
   pointer-events: none;
 }
 
 .smax-card--pred::before {
-  background: linear-gradient(140deg, rgba(255, 107, 53, 0.22), rgba(255, 255, 255, 0.55));
+  background: linear-gradient(140deg, rgba(255, 107, 53, 0.25), rgba(255, 255, 255, 0.55));
 }
 
 .smax-label {
@@ -276,10 +303,11 @@ body {
 
 .smax-value {
   font-family: 'Space Grotesk', sans-serif;
-  font-size: 36px;
+  font-size: 38px;
   font-weight: 700;
   position: relative;
   z-index: 1;
+  text-shadow: 0 12px 30px rgba(0, 0, 0, 0.08);
 }
 
 .smax-unit {
@@ -332,6 +360,7 @@ body {
 .graph-card {
   padding: 16px 16px 6px;
   margin-bottom: 24px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.82));
 }
 
 .section-head {
@@ -413,6 +442,7 @@ body {
 
 
 def parse_args():
+    default_port = int(os.environ.get("PORT", "8050"))
     parser = argparse.ArgumentParser(
         description="Dash app for coastal flood scenarios (DaMS4)."
     )
@@ -437,7 +467,7 @@ def parse_args():
         help="Path to best_model.joblib",
     )
     parser.add_argument("--host", default="127.0.0.1", help="Dash server host")
-    parser.add_argument("--port", type=int, default=8050, help="Dash server port")
+    parser.add_argument("--port", type=int, default=default_port, help="Dash server port")
     return parser.parse_args()
 
 
@@ -463,7 +493,7 @@ def parse_scenario_id(name):
 
 def list_scenarios(scenarios_dir):
     scenarios = []
-    if not scenarios_dir.exists():
+    if scenarios_dir is None or not scenarios_dir.exists():
         return scenarios
     pattern = re.compile(r"Dataset_X_sc_(\d+)\.csv$")
     for path in sorted(scenarios_dir.glob("Dataset_X_sc_*.csv")):
@@ -500,7 +530,8 @@ def build_app_css(base_dir):
 
 def load_features_table(features_file):
     if features_file is None or not features_file.exists():
-        return None, "fichier features introuvable"
+        name = features_file.name if features_file else "resume_Smax_final.csv"
+        return None, f"features manquantes ({name})"
     try:
         df = pd.read_csv(features_file)
     except Exception:
@@ -536,7 +567,8 @@ def index_features_table(df):
 
 def load_y_lookup(y_file):
     if y_file is None or not y_file.exists():
-        return {}, "fichier Y_Smax introuvable"
+        name = y_file.name if y_file else "Y_Smax.csv"
+        return {}, f"Y_Smax manquant ({name})"
     try:
         df = pd.read_csv(y_file)
     except Exception:
@@ -582,7 +614,8 @@ def load_y_lookup(y_file):
 
 def load_model(model_path):
     if model_path is None or not model_path.exists():
-        return None, "modele non charge"
+        name = model_path.name if model_path else "best_model.joblib"
+        return None, f"modele non charge ({name} absent)"
     try:
         payload = joblib.load(model_path)
     except ModuleNotFoundError as exc:
@@ -786,6 +819,19 @@ def badge_class(status):
     return "badge badge-na"
 
 
+def make_status_block(status_messages):
+    if not status_messages:
+        return None
+    return html.Div(
+        [
+            html.Div("Etat des donnees", className="status-title"),
+            html.Ul([html.Li(msg) for msg in status_messages], className="status-list"),
+        ],
+        className="status-card reveal",
+        style={"animationDelay": "0.08s"},
+    )
+
+
 def make_app(
     scenarios,
     features_map,
@@ -795,6 +841,7 @@ def make_app(
     threshold_default,
     threshold_max,
     threshold_marks,
+    status_messages,
     app_css,
 ):
     scenario_options = [
@@ -803,6 +850,8 @@ def make_app(
     ]
     default_value = scenario_options[0]["value"] if scenario_options else None
     scenario_map = {scenario_id: path for scenario_id, path in scenarios}
+    dropdown_disabled = not scenario_options
+    status_block = make_status_block(status_messages)
 
     app = Dash(__name__)
     app.title = "DaMS4 - Inondations cotieres"
@@ -833,74 +882,86 @@ def make_app(
 """
     )
 
-    app.layout = html.Div(
+    layout_children = [
+        html.Div(
+            [
+                html.Div(
+                    [
+                        html.Div("DaMS4 / Theme 1", className="eyebrow"),
+                        html.H1(
+                            "Inondations cotieres a Gavres",
+                            className="hero-title",
+                        ),
+                        html.P(
+                            "Explore les series temporelles 6h, la houle, le vent, la maree, "
+                            "et la surcote. Compare un scenario reel et sa prediction Smax.",
+                            className="hero-subtitle",
+                        ),
+                        html.Div(
+                            [
+                                html.Span("Houle", className="chip"),
+                                html.Span("Vent", className="chip"),
+                                html.Span("Maree", className="chip"),
+                                html.Span("Surcote", className="chip"),
+                                html.Span("Directions", className="chip"),
+                            ],
+                            className="chip-row",
+                        ),
+                    ]
+                ),
+                html.Div(
+                    [
+                        html.Div("Selection du scenario", className="card-title"),
+                        html.Label("Scenario", className="scenario-label"),
+                        dcc.Dropdown(
+                            id="scenario-dropdown",
+                            options=scenario_options,
+                            value=default_value,
+                            clearable=False,
+                            className="scenario-dropdown",
+                            placeholder=(
+                                "Dossier scenarios absent (mode demo)"
+                                if dropdown_disabled
+                                else None
+                            ),
+                            disabled=dropdown_disabled,
+                        ),
+                        html.Div(
+                            [
+                                html.Label(
+                                    "Seuil de surface inondee (m2)",
+                                    className="scenario-label",
+                                ),
+                                dcc.Slider(
+                                    id="surface-threshold",
+                                    min=0,
+                                    max=threshold_max,
+                                    step=1000,
+                                    value=threshold_default,
+                                    marks=threshold_marks,
+                                    tooltip={"placement": "bottom"},
+                                ),
+                            ],
+                            className="slider-wrap",
+                        ),
+                        html.Div(
+                            "Serie 6h superposees, colonnes disponibles incluses.",
+                            className="card-hint",
+                        ),
+                    ],
+                    className="control-card",
+                ),
+            ],
+            className="hero reveal",
+            style={"animationDelay": "0.05s"},
+        )
+    ]
+
+    if status_block is not None:
+        layout_children.append(status_block)
+
+    layout_children.extend(
         [
-            html.Div(
-                [
-                    html.Div(
-                        [
-                            html.Div("DaMS4 / Theme 1", className="eyebrow"),
-                            html.H1(
-                                "Inondations cotieres a Gavres",
-                                className="hero-title",
-                            ),
-                            html.P(
-                                "Explore les series temporelles 6h, la houle, le vent, la maree, "
-                                "et la surcote. Compare un scenario reel et sa prediction Smax.",
-                                className="hero-subtitle",
-                            ),
-                            html.Div(
-                                [
-                                    html.Span("Houle", className="chip"),
-                                    html.Span("Vent", className="chip"),
-                                    html.Span("Maree", className="chip"),
-                                    html.Span("Surcote", className="chip"),
-                                    html.Span("Directions", className="chip"),
-                                ],
-                                className="chip-row",
-                            ),
-                        ]
-                    ),
-                    html.Div(
-                        [
-                            html.Div("Selection du scenario", className="card-title"),
-                            html.Label("Scenario", className="scenario-label"),
-                            dcc.Dropdown(
-                                id="scenario-dropdown",
-                                options=scenario_options,
-                                value=default_value,
-                                clearable=False,
-                                className="scenario-dropdown",
-                            ),
-                            html.Div(
-                                [
-                                    html.Label(
-                                        "Seuil de surface inondee (m2)",
-                                        className="scenario-label",
-                                    ),
-                                    dcc.Slider(
-                                        id="surface-threshold",
-                                        min=0,
-                                        max=threshold_max,
-                                        step=1000,
-                                        value=threshold_default,
-                                        marks=threshold_marks,
-                                        tooltip={"placement": "bottom"},
-                                    ),
-                                ],
-                                className="slider-wrap",
-                            ),
-                            html.Div(
-                                "Serie 6h superposees, colonnes disponibles incluses.",
-                                className="card-hint",
-                            ),
-                        ],
-                        className="control-card",
-                    ),
-                ],
-                className="hero reveal",
-                style={"animationDelay": "0.05s"},
-            ),
             html.Div(
                 [
                     html.Div(
@@ -956,7 +1017,7 @@ def make_app(
                     ),
                 ],
                 className="kpi-card reveal",
-                style={"animationDelay": "0.12s"},
+                style={"animationDelay": "0.18s"},
             ),
             html.Div(
                 [
@@ -976,7 +1037,7 @@ def make_app(
                     ),
                 ],
                 className="graph-card reveal",
-                style={"animationDelay": "0.2s"},
+                style={"animationDelay": "0.22s"},
             ),
             html.Div(
                 [
@@ -1009,9 +1070,10 @@ def make_app(
                 ],
                 className="footer-note",
             ),
-        ],
-        className="app-shell",
+        ]
     )
+
+    app.layout = html.Div(layout_children, className="app-shell")
 
     @app.callback(
         Output("timeseries-graph", "figure"),
@@ -1106,44 +1168,42 @@ def make_app(
     return app
 
 
-def main():
-    args = parse_args()
-    base_dir = Path(__file__).resolve().parent
-
-    scenarios_dir = resolve_path(base_dir, args.scenarios_dir)
-    features_file = resolve_path(base_dir, args.features_file)
-    y_file = resolve_path(base_dir, args.y_file)
-    model_path = resolve_path(base_dir, args.model_path)
+def build_app(base_dir, scenarios_dir, features_file, y_file, model_path):
+    status_messages = []
 
     scenarios = list_scenarios(scenarios_dir)
+    if not scenarios:
+        status_messages.append("Dossier scenarios absent ou vide : mode demo (graphique indisponible).")
 
     features_df, features_status = load_features_table(features_file)
     features_map = index_features_table(features_df)
+    if features_status:
+        status_messages.append(features_status)
+    if not features_map:
+        status_messages.append("Features scenario manquantes : prediction Smax indisponible.")
 
     y_lookup, y_status = load_y_lookup(y_file)
+    if y_status:
+        status_messages.append(y_status)
 
     model_bundle, model_status = load_model(model_path)
-
-    if features_status:
-        print(f"[INFO] {features_status}")
-    if y_status:
-        print(f"[INFO] {y_status}")
     if model_status:
-        print(f"[INFO] {model_status}")
-
-    app_css = build_app_css(base_dir)
+        status_messages.append(model_status)
 
     threshold_default = DEFAULT_THRESHOLD
     threshold_max = 200000
     if y_lookup:
         max_val = max(y_lookup.values())
         threshold_max = max(threshold_max, int(max_val * 1.2))
+
     threshold_marks = {
         0: "0",
         threshold_default: "10k",
         int(threshold_max / 2): "mid",
         threshold_max: "max",
     }
+
+    app_css = build_app_css(base_dir)
 
     app = make_app(
         scenarios,
@@ -1154,10 +1214,37 @@ def main():
         threshold_default,
         threshold_max,
         threshold_marks,
+        status_messages,
         app_css,
     )
-    app.run(host=args.host, port=args.port, debug=False)
+    return app
 
+
+def main():
+    args = parse_args()
+    base_dir = Path(__file__).resolve().parent
+
+    scenarios_dir = resolve_path(base_dir, args.scenarios_dir)
+    features_file = resolve_path(base_dir, args.features_file)
+    y_file = resolve_path(base_dir, args.y_file)
+    model_path = resolve_path(base_dir, args.model_path)
+
+    app = build_app(base_dir, scenarios_dir, features_file, y_file, model_path)
+    global server
+    server = app.server
+
+    port = int(os.environ.get("PORT", str(args.port)))
+    app.run(host="0.0.0.0", port=port, debug=False)
+
+
+app = build_app(
+    Path(__file__).resolve().parent,
+    resolve_path(Path(__file__).resolve().parent, "mon_dossier_csv_converti"),
+    resolve_path(Path(__file__).resolve().parent, "resume_Smax_final.csv"),
+    resolve_path(Path(__file__).resolve().parent, "Y_Smax.csv"),
+    resolve_path(Path(__file__).resolve().parent, "best_model.joblib"),
+)
+server = app.server
 
 if __name__ == "__main__":
     main()

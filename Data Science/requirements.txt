@@ -1,5 +1,7 @@
-pandas
-numpy
 dash
 plotly
+pandas
+numpy
+scikit-learn
 joblib
+gunicorn
