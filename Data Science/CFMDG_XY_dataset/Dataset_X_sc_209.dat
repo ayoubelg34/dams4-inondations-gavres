@@ -1,0 +1,57 @@
+Input data (X), from "High Tide -3h" to "High Tide +3h", with t=0 at High Tide 
+----------------- 
+Description 
+Each input scenario is a dataset of time series of the following 8 variables, over a 6h time span, centered on high tide. 
+- NM: relative mean sea level (m), referenced to the French vertical datum (IGN69). Representative of the regional relative mean sea level (i.e. mean sea level accounting for the vertical ground motions). 
+- T: tidal water level (m), referenced to the relative mean sea level. Location (WGS84): (-3.36°E, 47.68°N). 
+- S: atmospheric storm surge (m). Location (WGS84): (-3.36°E, 47.68°N). 
+- Hs: significant wave height (m). Location (WGS84): (-3.4778°E, 47.5606°N). 
+- Tp: wave peak period (s). Location (WGS84): (-3.4778°E, 47.5606°N). 
+- Dp: wave peak direction (° in nautical convention). Location (WGS84): (-3.4778°E, 47.5606°N). 
+- U: wind speed (m/s). Location (WGS84): (-3.438°E,47.615°N). 
+- DU: wind direction (° in nautical convention). Location (WGS84): (-3.438°E,47.615°N). 
+----------------- 
+----------------- 
+Scenario n°209
+Type of Scenario: real past forcing event (outside the damage database of Idier et al. (2020) [https://link.springer.com/article/10.1007/s11069-020-03882-4]) 
+High Tide date (UTC): 1903-04-21T23:30:00 
+Data source: Hydro-Meteorological database (1900-2016) built by Idier et al.(2020) [https://link.springer.com/article/10.1007/s11069-020-03882-4]. 
+----------------- 
+t (min)	NM (m/IGN69)	T (m/NM)	S (m)	Hs (m)	Tp (s)	Dp (° nautical)	U (m/s)	DU (° nautical) 
+-180	 0.300	 0.13	 0.31	 0.48	 7.83	 263.04	 4.00	 45.77	
+-170	 0.300	 0.20	 0.31	 0.48	 7.83	 263.05	 4.04	 45.30	
+-160	 0.300	 0.27	 0.31	 0.48	 7.82	 263.07	 4.09	 44.84	
+-150	 0.300	 0.33	 0.31	 0.48	 7.82	 263.08	 4.13	 44.37	
+-140	 0.300	 0.40	 0.31	 0.48	 7.82	 263.10	 4.17	 43.90	
+-130	 0.300	 0.46	 0.31	 0.48	 7.81	 263.11	 4.21	 43.43	
+-120	 0.300	 0.51	 0.31	 0.48	 7.81	 263.13	 4.26	 42.96	
+-110	 0.300	 0.56	 0.30	 0.48	 7.80	 263.14	 4.30	 42.50	
+-100	 0.300	 0.61	 0.30	 0.48	 7.80	 263.15	 4.34	 42.03	
+-90	 0.300	 0.65	 0.30	 0.48	 7.79	 263.17	 4.38	 41.56	
+-80	 0.300	 0.68	 0.30	 0.48	 7.79	 263.18	 4.43	 41.09	
+-70	 0.300	 0.71	 0.30	 0.48	 7.78	 263.20	 4.47	 40.63	
+-60	 0.300	 0.74	 0.30	 0.48	 7.78	 263.21	 4.51	 40.16	
+-50	 0.300	 0.76	 0.30	 0.48	 7.78	 263.22	 4.55	 39.69	
+-40	 0.300	 0.78	 0.30	 0.48	 7.77	 263.24	 4.59	 39.22	
+-30	 0.300	 0.79	 0.30	 0.48	 7.77	 263.25	 4.64	 38.75	
+-20	 0.300	 0.80	 0.30	 0.48	 7.76	 263.27	 4.68	 38.29	
+-10	 0.300	 0.81	 0.30	 0.48	 7.76	 263.28	 4.72	 37.82	
+  0	 0.300	 0.81	 0.30	 0.48	 7.75	 263.29	 4.76	 37.35	
+ 10	 0.300	 0.80	 0.30	 0.48	 7.75	 263.31	 4.81	 36.88	
+ 20	 0.300	 0.80	 0.30	 0.48	 7.74	 263.32	 4.85	 36.42	
+ 30	 0.300	 0.78	 0.30	 0.48	 7.74	 263.34	 4.89	 35.95	
+ 40	 0.300	 0.77	 0.30	 0.48	 7.74	 263.35	 4.98	 35.44	
+ 50	 0.300	 0.75	 0.30	 0.48	 7.73	 263.37	 5.08	 34.93	
+ 60	 0.300	 0.72	 0.30	 0.48	 7.73	 263.39	 5.17	 34.42	
+ 70	 0.300	 0.70	 0.30	 0.48	 7.73	 263.40	 5.26	 33.92	
+ 80	 0.300	 0.67	 0.30	 0.48	 7.72	 263.42	 5.36	 33.41	
+ 90	 0.300	 0.63	 0.30	 0.48	 7.72	 263.43	 5.45	 32.90	
+100	 0.300	 0.59	 0.30	 0.48	 7.72	 263.45	 5.54	 32.39	
+110	 0.300	 0.55	 0.30	 0.48	 7.71	 263.47	 5.64	 31.89	
+120	 0.300	 0.51	 0.30	 0.48	 7.71	 263.48	 5.73	 31.38	
+130	 0.300	 0.46	 0.30	 0.48	 7.71	 263.50	 5.82	 30.87	
+140	 0.300	 0.41	 0.30	 0.48	 7.70	 263.52	 5.91	 30.36	
+150	 0.300	 0.35	 0.30	 0.48	 7.70	 263.53	 6.01	 29.86	
+160	 0.300	 0.29	 0.30	 0.48	 7.70	 263.55	 6.10	 29.35	
+170	 0.300	 0.23	 0.30	 0.48	 7.69	 263.57	 6.19	 28.84	
+180	 0.300	 0.17	 0.30	 0.48	 7.69	 263.58	 6.29	 28.33	

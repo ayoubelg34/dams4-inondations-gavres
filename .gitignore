@@ -1,0 +1,14 @@
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Dash / cache
+.cache/
+
+# Data volumineuses (optionnel si trop lourd)
+mon_dossier_csv_converti/
+*.joblib
+
+# OS
+.DS_Store
