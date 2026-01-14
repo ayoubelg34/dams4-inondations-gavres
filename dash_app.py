@@ -14,6 +14,22 @@ from dash import Dash, dcc, html, Input, Output
 H_DIGUE = 3.6
 DEFAULT_THRESHOLD = 10000
 COLORWAY = ["#0f8b8d", "#ff6b35", "#1d3557", "#2a9d8f", "#e9c46a", "#264653"]
+SIM_FIELDS = [
+    {"key": "NM_t0", "label": "NM_t0 (m)"},
+    {"key": "S_t0", "label": "S_t0 (m)"},
+    {"key": "Hs_t0", "label": "Hs_t0 (m)"},
+    {"key": "Tp_t0", "label": "Tp_t0 (s)"},
+    {"key": "T_t0", "label": "T_t0 (m)"},
+    {"key": "U_mean", "label": "U_mean (m/s)"},
+]
+SIM_DEFAULTS = {
+    "NM_t0": (0.0, 2.0),
+    "S_t0": (0.0, 1.5),
+    "Hs_t0": (0.0, 10.0),
+    "Tp_t0": (5.0, 20.0),
+    "T_t0": (0.0, 4.0),
+    "U_mean": (0.0, 40.0),
+}
 
 APP_CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
@@ -206,6 +222,71 @@ body {
 
 .slider-wrap {
   margin-top: 14px;
+}
+
+.tabs-root {
+  margin-bottom: 18px;
+}
+
+.tabs-root .tab-item {
+  border: 1px solid rgba(29, 53, 87, 0.18);
+  padding: 10px 18px;
+  border-radius: 999px;
+  margin-right: 8px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.7);
+  color: #1d3557;
+}
+
+.tabs-root .tab-item--selected {
+  background: #1d3557;
+  color: #fff;
+  box-shadow: 0 10px 26px rgba(29, 53, 87, 0.35);
+}
+
+.tab-content {
+  margin-top: 10px;
+}
+
+.sim-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 1.1fr) minmax(260px, 0.9fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.sim-panel {
+  padding: 18px;
+}
+
+.sim-result-card {
+  padding: 20px 22px;
+  position: relative;
+  overflow: hidden;
+}
+
+.sim-result-title {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 18px;
+  margin: 0 0 10px;
+}
+
+.sim-line {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0;
+}
+
+.sim-value {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.sim-note {
+  font-size: 12px;
+  color: var(--muted);
 }
 
 .status-card {
@@ -436,6 +517,9 @@ body {
   }
   .hero-title {
     font-size: 34px;
+  }
+  .sim-grid {
+    grid-template-columns: 1fr;
   }
 }
 """
@@ -742,6 +826,138 @@ def format_threshold(value):
         return "N/A"
 
 
+def format_slider_mark(value):
+    if value is None:
+        return ""
+    abs_val = abs(value)
+    if abs_val >= 100:
+        return f"{value:.0f}"
+    if abs_val >= 10:
+        return f"{value:.1f}"
+    return f"{value:.2f}"
+
+
+def compute_slider_configs(features_df):
+    configs = {}
+    for field in SIM_FIELDS:
+        key = field["key"]
+        label = field["label"]
+        series = pd.Series(dtype=float)
+        if features_df is not None and key in features_df.columns:
+            series = pd.to_numeric(features_df[key], errors="coerce").dropna()
+
+        min_val, max_val = SIM_DEFAULTS.get(key, (0.0, 1.0))
+        if not series.empty:
+            min_val = float(series.min())
+            max_val = float(series.max())
+            value = float(series.median())
+        else:
+            value = (min_val + max_val) / 2.0
+
+        if min_val == max_val:
+            max_val = min_val + 1.0
+
+        step = max((max_val - min_val) / 100.0, 0.01)
+        mid_val = (min_val + max_val) / 2.0
+        marks = {
+            round(min_val, 2): format_slider_mark(min_val),
+            round(mid_val, 2): "mid",
+            round(max_val, 2): format_slider_mark(max_val),
+        }
+        configs[key] = {
+            "label": label,
+            "min": round(min_val, 3),
+            "max": round(max_val, 3),
+            "step": round(step, 3),
+            "value": round(value, 3),
+            "marks": marks,
+        }
+    return configs
+
+
+def build_scatter_data(features_map, y_lookup, model_bundle):
+    points_x = []
+    points_y = []
+    labels = []
+
+    if not features_map:
+        return {"x": [], "y": [], "labels": [], "label": "Smax reelle"}
+
+    use_real = bool(y_lookup)
+    label = "Smax reelle"
+    if not use_real and model_bundle is not None:
+        label = "Smax predite (modele)"
+
+    for scenario_id, row in features_map.items():
+        niveau_total = compute_niveau_total(row)
+        if niveau_total is None:
+            continue
+        if use_real:
+            y_val = y_lookup.get(scenario_id)
+        else:
+            y_val, _ = predict_smax(model_bundle, row)
+        if y_val is None:
+            continue
+        points_x.append(niveau_total)
+        points_y.append(y_val)
+        labels.append(str(scenario_id))
+
+    return {"x": points_x, "y": points_y, "labels": labels, "label": label}
+
+
+def build_scatter_figure(scatter_base, scenario_point):
+    fig = go.Figure()
+    base_layout = dict(
+        template="plotly_white",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(family="IBM Plex Sans, sans-serif", color="#1b1b1b"),
+        xaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.08)", zeroline=False),
+        yaxis=dict(showgrid=True, gridcolor="rgba(0,0,0,0.08)", zeroline=False),
+        margin=dict(l=50, r=20, t=60, b=50),
+    )
+
+    if scatter_base and scatter_base.get("x"):
+        fig.add_trace(
+            go.Scatter(
+                x=scatter_base["x"],
+                y=scatter_base["y"],
+                mode="markers",
+                name=scatter_base.get("label", "Smax"),
+                text=scatter_base.get("labels", None),
+                marker=dict(size=7, color="rgba(29, 53, 87, 0.35)"),
+            )
+        )
+
+    if scenario_point and scenario_point.get("x") is not None and scenario_point.get("y") is not None:
+        fig.add_trace(
+            go.Scatter(
+                x=[scenario_point["x"]],
+                y=[scenario_point["y"]],
+                mode="markers",
+                name="Scenario simule",
+                marker=dict(
+                    size=16,
+                    symbol="star",
+                    color="#ff6b35",
+                    line=dict(width=1, color="#1d3557"),
+                ),
+            )
+        )
+
+    title = "Surface inondee vs niveau total estime"
+    if not scatter_base or not scatter_base.get("x"):
+        title = "Nuage indisponible (donnees manquantes)"
+
+    fig.update_layout(
+        title=title,
+        xaxis_title="Niveau total estime (m)",
+        yaxis_title="Surface inondee Smax (m2)",
+        **base_layout,
+    )
+    return fig
+
+
 def compute_niveau_total(feature_values):
     if feature_values is None:
         return None
@@ -842,6 +1058,8 @@ def make_app(
     threshold_max,
     threshold_marks,
     status_messages,
+    sim_configs,
+    scatter_base,
     app_css,
 ):
     scenario_options = [
@@ -1073,7 +1291,169 @@ def make_app(
         ]
     )
 
-    app.layout = html.Div(layout_children, className="app-shell")
+    overview_layout = html.Div(layout_children, className="tab-content")
+
+    sim_slider_blocks = []
+    for field in SIM_FIELDS:
+        key = field["key"]
+        cfg = sim_configs.get(key)
+        if cfg is None:
+            min_val, max_val = SIM_DEFAULTS.get(key, (0.0, 1.0))
+            cfg = {
+                "label": field["label"],
+                "min": min_val,
+                "max": max_val,
+                "step": max((max_val - min_val) / 100.0, 0.01),
+                "value": (min_val + max_val) / 2.0,
+                "marks": {
+                    min_val: format_slider_mark(min_val),
+                    max_val: format_slider_mark(max_val),
+                },
+            }
+
+        sim_slider_blocks.append(
+            html.Div(
+                [
+                    html.Label(cfg["label"], className="scenario-label"),
+                    dcc.Slider(
+                        id=f"sim-{key}",
+                        min=cfg["min"],
+                        max=cfg["max"],
+                        step=cfg["step"],
+                        value=cfg["value"],
+                        marks=cfg["marks"],
+                        tooltip={"placement": "bottom"},
+                    ),
+                ],
+                className="slider-wrap",
+            )
+        )
+
+    sim_layout = html.Div(
+        [
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.Div("Simulateur de scenario", className="card-title"),
+                            html.Div(
+                                "Ajuste les parametres pour estimer un nouveau Smax.",
+                                className="card-hint",
+                            ),
+                            *sim_slider_blocks,
+                        ],
+                        className="control-card sim-panel",
+                    ),
+                    html.Div(
+                        [
+                            html.Div("Scenario simule", className="sim-result-title"),
+                            html.Div(
+                                [
+                                    html.Span(
+                                        "Niveau total estime:",
+                                        className="kpi-label-text",
+                                    ),
+                                    html.Span(
+                                        "N/A",
+                                        id="sim-niveau-value",
+                                        className="sim-value",
+                                    ),
+                                    html.Span("m", className="smax-unit"),
+                                ],
+                                className="sim-line",
+                            ),
+                            html.Div(
+                                [
+                                    html.Span("Smax predite:", className="kpi-label-text"),
+                                    html.Span(
+                                        "N/A",
+                                        id="sim-smax-value",
+                                        className="sim-value",
+                                    ),
+                                    html.Span("m2", className="smax-unit"),
+                                ],
+                                className="sim-line",
+                            ),
+                            html.Div(
+                                [
+                                    html.Span(
+                                        "Depassement digue:",
+                                        className="kpi-label-text",
+                                    ),
+                                    html.Span(
+                                        "N/A",
+                                        id="sim-digue-badge",
+                                        className="badge badge-na",
+                                    ),
+                                ],
+                                className="sim-line",
+                            ),
+                            html.Div(
+                                "modele non charge",
+                                id="sim-smax-note",
+                                className="sim-note",
+                            ),
+                        ],
+                        className="kpi-card sim-result-card",
+                    ),
+                ],
+                className="sim-grid",
+            ),
+            html.Div(
+                [
+                    html.Div(
+                        [
+                            html.H3("Nuage de points", className="section-title"),
+                            html.Div(
+                                "Smax en fonction du niveau total estime",
+                                className="section-subtitle",
+                            ),
+                        ],
+                        className="section-head",
+                    ),
+                    dcc.Graph(
+                        id="sim-scatter",
+                        config={"displayModeBar": False, "displaylogo": False},
+                    ),
+                    html.Div(
+                        "Le point orange correspond au scenario simule.",
+                        className="card-hint",
+                    ),
+                ],
+                className="graph-card reveal",
+                style={"animationDelay": "0.18s"},
+            ),
+        ],
+        className="tab-content",
+    )
+
+    app.layout = html.Div(
+        [
+            dcc.Tabs(
+                id="main-tabs",
+                value="tab-overview",
+                className="tabs-root",
+                parent_className="tabs-root",
+                children=[
+                    dcc.Tab(
+                        label="Vue principale",
+                        value="tab-overview",
+                        className="tab-item",
+                        selected_className="tab-item--selected",
+                        children=overview_layout,
+                    ),
+                    dcc.Tab(
+                        label="Simulateur Smax",
+                        value="tab-sim",
+                        className="tab-item",
+                        selected_className="tab-item--selected",
+                        children=sim_layout,
+                    ),
+                ],
+            )
+        ],
+        className="app-shell",
+    )
 
     @app.callback(
         Output("timeseries-graph", "figure"),
@@ -1165,6 +1545,61 @@ def make_app(
             signif_line,
         )
 
+    @app.callback(
+        Output("sim-scatter", "figure"),
+        Output("sim-niveau-value", "children"),
+        Output("sim-smax-value", "children"),
+        Output("sim-smax-note", "children"),
+        Output("sim-digue-badge", "children"),
+        Output("sim-digue-badge", "className"),
+        Input("sim-NM_t0", "value"),
+        Input("sim-S_t0", "value"),
+        Input("sim-Hs_t0", "value"),
+        Input("sim-Tp_t0", "value"),
+        Input("sim-T_t0", "value"),
+        Input("sim-U_mean", "value"),
+    )
+    def update_sim(
+        nm_t0,
+        s_t0,
+        hs_t0,
+        tp_t0,
+        t_t0,
+        u_mean,
+    ):
+        sim_values = {
+            "NM_t0": safe_float(nm_t0),
+            "S_t0": safe_float(s_t0),
+            "Hs_t0": safe_float(hs_t0),
+            "Tp_t0": safe_float(tp_t0),
+            "T_t0": safe_float(t_t0),
+            "U_mean": safe_float(u_mean),
+        }
+        niveau_total = compute_niveau_total(sim_values)
+        niveau_text = format_slider_mark(niveau_total) if niveau_total is not None else "N/A"
+
+        pred_value, pred_status = predict_smax(model_bundle, sim_values)
+        smax_text = format_surface(pred_value)
+        smax_note = "metamodele charge" if pred_value is not None else (pred_status or model_status)
+
+        digue = digue_status(niveau_total)
+        digue_class = badge_class(digue)
+
+        scenario_point = None
+        if niveau_total is not None and pred_value is not None:
+            scenario_point = {"x": niveau_total, "y": pred_value}
+
+        fig = build_scatter_figure(scatter_base, scenario_point)
+
+        return (
+            fig,
+            niveau_text,
+            smax_text,
+            smax_note,
+            digue,
+            digue_class,
+        )
+
     return app
 
 
@@ -1189,6 +1624,9 @@ def build_app(base_dir, scenarios_dir, features_file, y_file, model_path):
     model_bundle, model_status = load_model(model_path)
     if model_status:
         status_messages.append(model_status)
+
+    sim_configs = compute_slider_configs(features_df)
+    scatter_base = build_scatter_data(features_map, y_lookup, model_bundle)
 
     threshold_default = DEFAULT_THRESHOLD
     threshold_max = 200000
@@ -1215,6 +1653,8 @@ def build_app(base_dir, scenarios_dir, features_file, y_file, model_path):
         threshold_max,
         threshold_marks,
         status_messages,
+        sim_configs,
+        scatter_base,
         app_css,
     )
     return app
